@@ -49,6 +49,12 @@ find_package(OpenSSL REQUIRED)
 
 set( CMAKE_FIND_LIBRARY_SUFFIXES ${ORIGINAL_LIB_SUFFIXES} )
 
+if ("${CORE_SYMBOL_NAME}" STREQUAL "")
+  set( CORE_SYMBOL_NAME "GXC" )
+endif()
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/fc/crypto/public_key.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/fc/crypto/public_key.hpp)
+
 set( fc_sources
      src/uint128.cpp
      src/real128.cpp
@@ -145,6 +151,7 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_ASIO_HAS_STD_CHRONO")
 
 target_include_directories(fc
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_BINARY_DIR}/include
     ${Boost_INCLUDE_DIR}
     ${OPENSSL_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/websocketpp
