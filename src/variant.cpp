@@ -8,6 +8,8 @@
 #include <fc/reflect/variant.hpp>
 #include <fc/io/json.hpp>
 #include <algorithm>
+#include <fc/io/datastream.hpp>
+#include <fc/io/raw.hpp>
 
 namespace fc
 {
@@ -732,14 +734,45 @@ void to_variant( const std::vector<char>& var,  variant& vo )
       vo = variant(to_hex(var.data(),var.size()));
   else vo = "";
 }
+
+#define SERIALIZE(type, handler)                  \
+   do {                                           \
+      vo.resize(sizeof(type));                    \
+      datastream<char*> ds(vo.data(), vo.size()); \
+      fc::raw::pack(ds, var.handler());         \
+   } while (0)
+
 void from_variant( const variant& var,  std::vector<char>& vo )
 {
-     auto str = var.as_string();
-     vo.resize( str.size() / 2 );
-     if( vo.size() )
-     {
-        size_t r = from_hex( str, vo.data(), vo.size() );
-        FC_ASSERT( r == vo.size() );
+     using type_id = variant::type_id;
+
+     switch( var.get_type() ) {
+        case type_id::int64_type:
+           SERIALIZE(int64_t, as_int64);
+           break;
+        case type_id::uint64_type:
+           SERIALIZE(uint64_t, as_uint64);
+           break;
+        case type_id::double_type:
+           SERIALIZE(double, as_double);
+           break;
+        case type_id::bool_type:
+           SERIALIZE(bool, as_bool);
+           break;
+        default:
+           auto str = var.as_string();
+
+           if (str.find("0x") != string::npos)
+              str = str.substr(str.find("0x") + 2);
+           if (str.size() % 2)
+              str.insert(0, "0");
+
+           vo.resize( str.size() / 2 );
+           if( vo.size() )
+           {
+              size_t r = from_hex( str, vo.data(), vo.size() );
+              FC_ASSERT( r == vo.size() );
+           }
      }
 //   std::string b64 = base64_decode( var.as_string() );
 //   vo = std::vector<char>( b64.c_str(), b64.c_str() + b64.size() );
