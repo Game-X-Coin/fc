@@ -761,7 +761,7 @@ void from_variant( const variant& var,  std::vector<char>& vo )
            SERIALIZE(bool, as_bool);
            break;
         default:
-           const auto& str = var.get_string();
+           auto str = var.as_string();
            if (str.find("0x") != string::npos)
               str = str.substr(str.find("0x") + 2);
            FC_ASSERT( str.size() <= 2*MAX_SIZE_OF_BYTE_ARRAYS ); // Doubled because hex strings needs two characters per byte
@@ -771,6 +771,7 @@ void from_variant( const variant& var,  std::vector<char>& vo )
               size_t r = from_hex( str, vo.data(), vo.size() );
               FC_ASSERT( r == vo.size() );
            }
+     }
 }
 
 void to_variant( const UInt<8>& n, variant& v ) { v = uint64_t(n); }
