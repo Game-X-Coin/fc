@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <new>
 #include <vector>
+#include <type_traits>
+#include <tuple>
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4482) // nonstandard extension used enum Name::Val, standard in C++11
@@ -11,6 +13,8 @@
 #define NO_RETURN __attribute__((noreturn))
 #endif
 
+#define MAX_NUM_ARRAY_ELEMENTS (1024*1024)
+#define MAX_SIZE_OF_BYTE_ARRAYS (20*1024*1024)
 
 //namespace std {
 //  typedef decltype(sizeof(int)) size_t;
@@ -38,14 +42,91 @@ namespace fc {
   struct true_type  { enum _value { value = 1 }; };
   struct false_type { enum _value { value = 0 }; };
 
-  namespace detail {
-    template<typename T> fc::true_type is_class_helper(void(T::*)());
-    template<typename T> fc::false_type is_class_helper(...);
-  }
+   namespace detail {
+      template<typename T> fc::true_type is_class_helper(void(T::*)());
+      template<typename T> fc::false_type is_class_helper(...);
+
+      template<typename T, typename A>
+      struct supports_allocator {
+      private:
+         template<typename TT, typename AA>
+         static auto test( int ) -> decltype( TT(std::declval<AA>()).get_allocator(), std::true_type() ) { return {}; }
+
+         template<typename, typename>
+         static std::false_type test( long ) { return {}; }
+
+      public:
+         static constexpr bool value = std::is_same<decltype( test<T,A>( 0 ) ), std::true_type>::value;
+      };
+
+      template<typename T, typename A>
+      auto default_construct_maybe_with_allocator( A&& allocator )
+      -> std::enable_if_t<supports_allocator<T, A>::value , T>
+      {
+         return T( std::forward<A>(allocator) );
+      }
+
+      template<typename T, typename A>
+      auto default_construct_maybe_with_allocator( A&& )
+      -> std::enable_if_t<!supports_allocator<T, A>::value , T>
+      {
+         return T();
+      }
+
+      template<typename T1, typename T2, typename A>
+      auto default_construct_pair_maybe_with_allocator( A&& allocator )
+      -> std::enable_if_t<
+            supports_allocator<T1, A>::value
+            && supports_allocator<T2, A>::value
+         , std::pair<T1,T2>>
+      {
+         return std::pair<T1,T2>( std::piecewise_construct,
+                                  std::forward_as_tuple( allocator ),
+                                  std::forward_as_tuple( allocator )
+         );
+      }
+
+      template<typename T1, typename T2, typename A>
+      auto default_construct_pair_maybe_with_allocator( A&& allocator )
+      -> std::enable_if_t<
+            supports_allocator<T1, A>::value
+            && !supports_allocator<T2, A>::value
+         , std::pair<T1,T2>>
+      {
+         return std::pair<T1,T2>( std::piecewise_construct,
+                                  std::forward_as_tuple( std::forward<A>(allocator) ),
+                                  std::forward_as_tuple()
+         );
+      }
+
+      template<typename T1, typename T2, typename A>
+      auto default_construct_pair_maybe_with_allocator( A&& allocator )
+      -> std::enable_if_t<
+            !supports_allocator<T1, A>::value
+            && supports_allocator<T2, A>::value
+         , std::pair<T1,T2>>
+      {
+         return std::pair<T1,T2>( std::piecewise_construct,
+                                  std::forward_as_tuple(),
+                                  std::forward_as_tuple( std::forward<A>(allocator) )
+         );
+      }
+
+      template<typename T1, typename T2, typename A>
+      auto default_construct_pair_maybe_with_allocator( A&& allocator )
+      -> std::enable_if_t<
+            !supports_allocator<T1, A>::value
+            && !supports_allocator<T2, A>::value
+         , std::pair<T1,T2>>
+      {
+         return std::pair<T1,T2>();
+      }
+
+   }
 
   template<typename T>
   struct is_class { typedef decltype(detail::is_class_helper<T>(0)) type; enum value_enum { value = type::value }; };
-#ifdef min 
+#ifdef min
 #undef min
 #endif
   template<typename T>
@@ -55,7 +136,7 @@ namespace fc {
      int i = 0;
      while(*(str+i) != '\0')
         i++;
-     return i; 
+     return i;
   }
 
 
@@ -91,7 +172,7 @@ namespace fc {
 
   // outside of namespace fc becuase of VC++ conflict with std::swap
   template<typename T>
-  void fc_swap( T& a, T& b ) {     
+  void fc_swap( T& a, T& b ) {
     T tmp = fc::move(a);
     a = fc::move(b);
     b = fc::move(tmp);
@@ -99,4 +180,3 @@ namespace fc {
 
 #define LLCONST(constant)   static_cast<int64_t>(constant##ll)
 #define ULLCONST(constant)  static_cast<uint64_t>(constant##ull)
-
