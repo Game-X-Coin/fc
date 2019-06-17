@@ -1,6 +1,5 @@
-# Setup module path to make visible used CMake extensions
-#INCLUDE(GetPrerequisites)
-#INCLUDE(VersionMacros)
+project( fc )
+cmake_minimum_required( VERSION 3.8 )
 
 SET( DEFAULT_HEADER_INSTALL_DIR usr/include/${target} )
 SET( DEFAULT_LIBRARY_INSTALL_DIR usr/lib )
@@ -14,7 +13,17 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   set(platformBitness 64)
 endif()
 
-SET (ORIGINAL_LIB_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
+
+include( GNUInstallDirs )
+include( SetupTargetMacros )
+
+if(CMAKE_CXX_STANDARD EQUAL 98 OR CMAKE_CXX_STANDARD LESS 17)
+   message(FATAL_ERROR "fc requires c++17 or newer")
+elseif(NOT CMAKE_CXX_STANDARD)
+   set(CMAKE_CXX_STANDARD 17)
+   set(CMAKE_CXX_STANDARD_REQUIRED ON)
+endif()
 
 add_subdirectory( secp256k1 )
 
@@ -31,13 +40,9 @@ ENDIF( ECC_IMPL STREQUAL openssl )
 
 MESSAGE(STATUS "Configuring fc to build on Unix/Apple")
 
-SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a;.so")
-
-IF(NOT APPLE)
- # Linux or other unix
- SET(rt_library rt )
- SET(pthread_library pthread)
-ENDIF(NOT APPLE)
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads)
 
 IF(NOT "$ENV{OPENSSL_ROOT_DIR}" STREQUAL "")
   set(OPENSSL_ROOT_DIR $ENV{OPENSSL_ROOT_DIR} )
@@ -46,8 +51,6 @@ IF(NOT "$ENV{OPENSSL_ROOT_DIR}" STREQUAL "")
 ENDIF()
 
 find_package(OpenSSL REQUIRED)
-
-set( CMAKE_FIND_LIBRARY_SUFFIXES ${ORIGINAL_LIB_SUFFIXES} )
 
 if ("${CORE_SYMBOL_NAME}" STREQUAL "")
   set( CORE_SYMBOL_NAME "GXC" )
@@ -62,7 +65,6 @@ set( fc_sources
      src/exception.cpp
      src/variant_object.cpp
      src/string.cpp
-     src/shared_ptr.cpp
      src/time.cpp
      src/utf8.cpp
      src/io/datastream.cpp
@@ -121,11 +123,16 @@ set( sources
   ${fc_sources}
 )
 
-#configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/git_revision.cpp.in" "${CMAKE_CURRENT_BINARY_DIR}/git_revision.cpp" @ONLY)
-#list(APPEND sources "${CMAKE_CURRENT_BINARY_DIR}/git_revision.cpp")
 list(APPEND sources ${fc_headers})
 
 setup_library( fc SOURCES ${sources} LIBRARY_TYPE STATIC DONT_INSTALL_LIBRARY )
+
+find_package(Boost 1.66 REQUIRED COMPONENTS
+    date_time
+    filesystem
+    chrono
+    unit_test_framework
+    iostreams)
   
 IF(APPLE)
   # As of 10.10 yosemite, the OpenSSL static libraries shipped with os x have a dependency
@@ -146,8 +153,7 @@ else()
 endif( ZLIB_FOUND )
 
 # This will become unnecessary once we update to websocketpp which fixes upstream issue #395
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWEBSOCKETPP_STRICT_MASKING")
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_ASIO_HAS_STD_CHRONO")
+add_definitions(-DWEBSOCKETPP_STRICT_MASKING -DBOOST_ASIO_HAS_STD_CHRONO)
 
 target_include_directories(fc
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -165,7 +171,9 @@ IF(APPLE)
   find_library(security_framework Security)
   find_library(corefoundation_framework CoreFoundation)
 ENDIF()
-target_link_libraries( fc PUBLIC ${LINK_USR_LOCAL_LIB} ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${PLATFORM_SPECIFIC_LIBS} ${RPCRT4} ${CMAKE_DL_LIBS} ${rt_library} ${readline_libraries} ${ECC_LIB} ${security_framework} ${corefoundation_framework} )
+target_link_libraries( fc PUBLIC ${LINK_USR_LOCAL_LIB}
+                                 Boost::date_time Boost::filesystem Boost::chrono Boost::iostreams Threads::Threads
+                                 ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${PLATFORM_SPECIFIC_LIBS} ${RPCRT4} ${CMAKE_DL_LIBS} ${readline_libraries} ${ECC_LIB} ${security_framework} ${corefoundation_framework} )
 
 
 SET(OPENSSL_CONF_TARGET )
