@@ -14,8 +14,6 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   set(platformBitness 64)
 endif()
 
-SET (ORIGINAL_LIB_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-
 add_subdirectory( secp256k1 )
 
 IF( ECC_IMPL STREQUAL openssl )
@@ -31,8 +29,6 @@ ENDIF( ECC_IMPL STREQUAL openssl )
 
 MESSAGE(STATUS "Configuring fc to build on Unix/Apple")
 
-SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a;.so")
-
 IF(NOT APPLE)
  # Linux or other unix
  SET(rt_library rt )
@@ -47,12 +43,6 @@ ENDIF()
 
 find_package(OpenSSL REQUIRED)
 
-set( CMAKE_FIND_LIBRARY_SUFFIXES ${ORIGINAL_LIB_SUFFIXES} )
-
-if ("${CORE_SYMBOL_NAME}" STREQUAL "")
-  set( CORE_SYMBOL_NAME "GXC" )
-endif()
-
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/fc/crypto/public_key.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/fc/crypto/public_key.hpp)
 
 set( fc_sources
@@ -62,7 +52,6 @@ set( fc_sources
      src/exception.cpp
      src/variant_object.cpp
      src/string.cpp
-     src/shared_ptr.cpp
      src/time.cpp
      src/utf8.cpp
      src/io/datastream.cpp
